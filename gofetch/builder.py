@@ -25,5 +25,5 @@ def load_from_file(fn):
             continue
         workspace = Workspace(wspath, **ops)
 
-        for remote in workspace.remotes():
+        for _, remote, _ in workspace.remotes():
             yield remote, workspace

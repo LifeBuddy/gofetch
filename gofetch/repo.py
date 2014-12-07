@@ -9,6 +9,9 @@ import subprocess
 import pwd
 import grp
 import re
+import threading
+import time
+import traceback
 from subprocess import PIPE
 
 def popen(args, *, user=None, group=None, **kw):
@@ -47,6 +50,7 @@ class Workspace:
         """Workspace(str)"""
         self.workspace = os.path.abspath(path)
         self.flags = flags or {}
+        self.lock = threading.RLock()
 
     def _git(self, *args, **kw):
         """Execute git."""
@@ -67,10 +71,11 @@ class Workspace:
 
         If the remote rejects it, a pull will attempted.
         """
-        self._check(self._git('add', '.'))
-        self._check(self._git('commit', '.', '-m', "Autocommit"))
-        self._check(self._git('push'))
-        # TODO: If remote rejects, pull and push again.
+        with self.lock:
+            self._check(self._git('add', '.'))
+            self._check(self._git('commit', '.', '-m', "Autocommit"))
+            self._check(self._git('push'))
+            # TODO: If remote rejects, pull and push again.
 
     def pull(self):
         """
@@ -78,8 +83,9 @@ class Workspace:
 
         If something cannot be automatically merged, we use the version in git.
         """
-        self._check(self._git('pull', '--commit', '-X', 'theirs'))
-        self._check(self._git('push'))
+        with self.lock:
+            self._check(self._git('pull', '--commit', '-X', 'theirs'))
+            self._check(self._git('push'))
 
     def remotes(self):
         rem = self._git('remote', '-v', stdout=PIPE)
@@ -88,5 +94,55 @@ class Workspace:
             match = REMOTES.match(line.rstrip())
             yield match.groups()
 
-    def watch(self):
-        
+    def watch(self, wait=10):
+        """
+        Watch with inotify and autopush on change.
+        """
+        # 1. Set recurrent, resettable timer to call autopush
+        @RecallerTimer
+        def dothething():
+            self.autopush()
+        # 2. Watch self.workspace
+        # 3. on change, reset timer
+
+
+class RecallerTimer:
+    """
+    Schedule a thing to be called. Rescheduling prevents the
+    previous schedule from executing, unless it already did.
+    """
+    def __init__(self, func):
+        self.func = func
+        self.event = threading.Event()
+        self.lock = threading.Lock()
+        self.when = None
+        self.thread = None
+
+    def schedule(self, when):
+        with self.lock:
+            self.when = when
+            self.event.set()
+
+    def job(self):
+        while True:
+            now = time.time()
+            if self.when is None:
+                self.event.wait()
+            elif now < self.when:
+                time.sleep(self.when - now)
+            else:
+                with self.lock:
+                    self.when = None
+                    self.event.clear()
+                try:
+                    self.func()
+                except Exception:
+                    # Eat it and continue
+                    traceback.print_exc()
+
+    def start(self):
+        self.thread = threading.Thread(
+            target=self.func,
+            name=self.func.__name__,
+            daemon=True)
+        self.thread.start()
