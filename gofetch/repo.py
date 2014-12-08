@@ -63,7 +63,7 @@ class Workspace:
         """Temporary method that waits and checks a Popen object."""
         retcode = proc.wait()
         if retcode != 0:
-            raise subprocess.CalledProcessError
+            raise subprocess.CalledProcessError(retcode, proc.args)
 
     def autopush(self):
         """
@@ -72,10 +72,14 @@ class Workspace:
         If the remote rejects it, a pull will attempted.
         """
         with self.lock:
-            self._check(self._git('add', '.'))
-            self._check(self._git('commit', '.', '-m', "Autocommit"))
-            self._check(self._git('push'))
-            # TODO: If remote rejects, pull and push again.
+            status, _ = self._git('status', '--porcelain', stdout=PIPE).communicate()
+            if len(status):
+                self._check(self._git('add', '.'))
+                self._check(self._git('commit', '.', '-m', "Autocommit"))
+                self._check(self._git('push'))
+                # TODO: If remote rejects, pull and push again.
+            else:
+                print("Skipping...")
 
     def pull(self):
         """
@@ -84,6 +88,7 @@ class Workspace:
         If something cannot be automatically merged, we use the version in git.
         """
         with self.lock:
+            print("pull")
             self._check(self._git('pull', '--commit', '-X', 'theirs'))
             self._check(self._git('push'))
 
@@ -96,7 +101,7 @@ class Workspace:
         rem = self._git('remote', '-v', stdout=PIPE)
         REMOTES = re.compile(r"(.*)\t(.*) \((.*)\)")
         for line in rem.stdout:
-            match = REMOTES.match(line.rstrip())
+            match = REMOTES.match(line.decode('utf-8').rstrip())
             yield match.groups()
 
     def watch(self, wait=10):
@@ -115,16 +120,18 @@ class Workspace:
         wm = pyinotify.WatchManager()
         wm.add_watch(
             self.workspace,
-            pyinotify.ALL_EVENTS & ~pyinotify.IN_ACCESS,
+            pyinotify.IN_CREATE | pyinotify.IN_DELETE |
+            pyinotify.IN_MODIFY | pyinotify.IN_ATTRIB |
+            pyinotify.IN_MOVE_SELF |
+            pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVED_TO,
             rec=True,
             auto_add=True,
-            exclude_filter=lambda path: path.endswith('.git'),
+            exclude_filter=lambda path: path.endswith('/.git') or '/.git/' in path,
             )
         # 3. on change, reset timer
-        class Handler(pyinotify.ProcessEvent):
-            def process_default(self, event):
-                dothething.schedule(time.time() + wait)
-        notifier = pyinotify.Notifier(wm, Handler())
+        def handleevent(event):
+            dothething.schedule(time.time() + wait)
+        notifier = pyinotify.Notifier(wm, handleevent)
         notifier.loop()
 
 

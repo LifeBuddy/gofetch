@@ -17,7 +17,7 @@ def load_from_file(fn):
     """
     rv = {}
     ops = {}
-    for line in open(fn):
+    for line in open(fn, encoding='utf-8'):
         wspath = line.strip()
         if wspath.startswith('@'):
             # This is actually a flag

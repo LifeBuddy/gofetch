@@ -12,7 +12,11 @@ def watch_rpc(regi):
 
     Watches on the FIFO for lines of remotes
     """
-    os.mkfifo(FIFO)
+    oldmask = os.umask(0)
+    try:
+        os.mkfifo(FIFO)
+    finally:
+        os.umask(oldmask)
     try:
         with open(FIFO, 'r') as fifo:
             for line in fifo:
@@ -28,7 +32,8 @@ def watch_rpc(regi):
 
 
 def masterrunner():
+    """Run the application."""
     regi = dict(load_from_file(CONF))
     for ws in regi.values():
-        threading.Thread(target=ws.watch, name=ws.workspace, daemon=True)
+        threading.Thread(target=ws.watch, name=ws.workspace, daemon=True).start()
     watch_rpc(regi)
