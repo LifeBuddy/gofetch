@@ -24,7 +24,7 @@ def load_from_file(fn):
             key, value = wspath[1:].split('=', 1)
             ops[key] = value
             continue
-        workspace = Workspace(wspath, **ops)
+        workspace = Workspace(wspath, ops)
 
         for _, remote, _ in workspace.remotes():
             yield remote, workspace
