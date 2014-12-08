@@ -32,9 +32,8 @@ def popen(args, *, user=None, group=None, **kw):
         """Set the UID/GID of the process before the exec()."""
         if uid is not None:
             os.setuid(uid)
-        if gid is not None:
-            os.setgid(gid)
-
+        # if gid is not None:
+        #     os.setgid(gid)
     return subprocess.Popen(args, preexec_fn=preexec, **kw)
 
 
