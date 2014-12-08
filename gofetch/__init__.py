@@ -1,6 +1,9 @@
 import os
+import threading
+from .builder import load_from_file
 
 FIFO = '/var/run/gofetch.fifo'
+CONF = '/etc/gofetch.conf'
 
 
 def watch_rpc(regi):
@@ -22,3 +25,10 @@ def watch_rpc(regi):
                     wspace.pull()
     finally:
         os.unlink(FIFO)
+
+
+def masterrunner():
+    regi = dict(load_from_file(CONF))
+    for ws in regi.values():
+        threading.Thread(target=ws.watch, name=ws.workspace, daemon=True)
+    watch_rpc(regi)

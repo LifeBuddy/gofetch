@@ -12,6 +12,7 @@ import re
 import threading
 import time
 import traceback
+import pyinotify
 from subprocess import PIPE
 
 def popen(args, *, user=None, group=None, **kw):
@@ -44,7 +45,6 @@ class Workspace:
 
     Operations are executed asyncronously, and only one executes at a time.
     """
-    # TODO: Actually implement mutex
 
     def __init__(self, path, flags=None):
         """Workspace(str)"""
@@ -88,6 +88,11 @@ class Workspace:
             self._check(self._git('push'))
 
     def remotes(self):
+        """
+        List the remotes of a function.
+
+        name, URL, direction.
+        """
         rem = self._git('remote', '-v', stdout=PIPE)
         REMOTES = re.compile(r"(.*)\t(.*) \((.*)\)")
         for line in rem.stdout:
@@ -97,13 +102,30 @@ class Workspace:
     def watch(self, wait=10):
         """
         Watch with inotify and autopush on change.
+
+        TODO: Document threading
         """
         # 1. Set recurrent, resettable timer to call autopush
         @RecallerTimer
         def dothething():
+            "Do the thing!"
             self.autopush()
+        dothething.start()
         # 2. Watch self.workspace
+        wm = pyinotify.WatchManager()
+        wm.add_watch(
+            self.workspace,
+            pyinotify.ALL_EVENTS & ~pyinotify.IN_ACCESS,
+            rec=True,
+            auto_add=True,
+            exclude_filter=lambda path: path.endswith('.git'),
+            )
         # 3. on change, reset timer
+        class Handler(pyinotify.ProcessEvent):
+            def process_default(self, event):
+                dothething.schedule(time.time() + wait)
+        notifier = pyinotify.Notifier(wm, Handler())
+        notifier.loop()
 
 
 class RecallerTimer:
@@ -119,11 +141,19 @@ class RecallerTimer:
         self.thread = None
 
     def schedule(self, when):
+        """
+        Set a schedule.
+
+        If the function is currently scheduled, use this schedule instead.
+
+        If not, it is now!
+        """
         with self.lock:
             self.when = when
             self.event.set()
 
     def job(self):
+        """The check/delay loop."""
         while True:
             now = time.time()
             if self.when is None:
@@ -141,8 +171,9 @@ class RecallerTimer:
                     traceback.print_exc()
 
     def start(self):
+        """Start the processing thread."""
         self.thread = threading.Thread(
-            target=self.func,
+            target=self.job,
             name=self.func.__name__,
             daemon=True)
         self.thread.start()

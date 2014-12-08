@@ -2,16 +2,17 @@
 Responsible for reading in the config file and creating objects from it.
 
 Config files work like this:
-* If it starts with an '@', it's interpretted as a flag and applies to 
+* If it starts with an '@', it's interpretted as a flag and applies to
   repos following it
 * Otherwise, it's a path to a workspace to keep synced.
 """
 
 from .repo import Workspace
 
+
 def load_from_file(fn):
     """
-    Read a config file, producing a dictionary mapping 
+    Read a config file, producing a dictionary mapping
     Workspace objects.
     """
     rv = {}
