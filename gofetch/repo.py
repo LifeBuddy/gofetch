@@ -15,6 +15,7 @@ import traceback
 import pyinotify
 from subprocess import PIPE
 
+
 def popen(args, *, user=None, group=None, **kw):
     """
     Wrapper around subprocess.Popen to implement setuid/setgid.
@@ -25,6 +26,7 @@ def popen(args, *, user=None, group=None, **kw):
     uid = gid = None
     if user is not None:
         uid = pwd.getpwnam(user).pw_uid
+        kw.setdefault('env', {})['HOME'] = os.path.expanduser('~{}'.format(user))
     if group is not None:
         gid = grp.getgrnam(group).gr_gid
 
