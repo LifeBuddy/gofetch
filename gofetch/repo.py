@@ -73,6 +73,7 @@ class Workspace:
         If the remote rejects it, a pull will attempted.
         """
         with self.lock:
+            print("autopush:", self.workspace)
             status, _ = self._git('status', '--porcelain', stdout=PIPE).communicate()
             if len(status):
                 self._check(self._git('add', '.'))
@@ -89,7 +90,7 @@ class Workspace:
         If something cannot be automatically merged, we use the version in git.
         """
         with self.lock:
-            print("pull")
+            print("pull:", self.workspace)
             self._check(self._git('pull', '--commit', '-X', 'theirs'))
             self._check(self._git('push'))
 
@@ -114,7 +115,7 @@ class Workspace:
         # 1. Set recurrent, resettable timer to call autopush
         @RecallerTimer
         def dothething():
-            "Do the thing!"
+            """Do the thing!"""
             self.autopush()
         dothething.start()
         # 2. Watch self.workspace
