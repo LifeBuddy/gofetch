@@ -35,5 +35,7 @@ def masterrunner():
     """Run the application."""
     regi = dict(load_from_file(CONF))
     for ws in regi.values():
+        ws.pull()
+        ws.autopush()
         threading.Thread(target=ws.watch, name=ws.workspace, daemon=True).start()
     watch_rpc(regi)
